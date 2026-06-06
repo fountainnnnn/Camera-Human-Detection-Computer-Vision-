@@ -1,0 +1,12 @@
+numpy>=1.26,<3
+opencv-python>=4.9,<5
+PyYAML>=6.0,<7
+python-dotenv>=1.0,<2
+requests>=2.31,<3
+gdown>=5.2,<6
+psutil>=5.9,<6
+ultralytics>=8.3,<9
+torch>=2.2,<3
+pandas>=2.2,<3
+scikit-learn>=1.4,<2
+pytest>=8.2,<9

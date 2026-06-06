@@ -1,0 +1,53 @@
+input:
+  mode: "webcam"
+  webcam_index: 0
+  video_path: ""
+  image_folder: ""
+  rtsp_detection_url: "rtsp://username:password@192.168.1.50:554/stream2"
+  rtsp_snapshot_url: "rtsp://username:password@192.168.1.50:554/stream1"
+  reconnect_delay_seconds: 5
+  max_reconnect_attempts: 999999
+  loop_image_folder: false
+
+camera:
+  name: "Test Camera"
+
+model:
+  path: "models/human_kaist_lwir_yolo11n.pt"
+  person_class_id: 0
+  confidence_threshold: 0.60
+  inference_size: 640
+  device: "auto"
+
+detection:
+  sample_fps: 2
+  rolling_window_size: 5
+  min_positive_frames: 2
+  min_detection_duration_seconds: 0.5
+  alert_cooldown_seconds: 60
+  min_box_area_ratio: 0.01
+  max_box_area_ratio: 0.80
+
+zones:
+  enabled: false
+  monitored_zones: []
+  ignore_zones: []
+
+telegram:
+  enabled: false
+  bot_token_env: "TELEGRAM_BOT_TOKEN"
+  chat_id_env: "TELEGRAM_CHAT_ID"
+
+storage:
+  alert_dir: "alerts"
+  log_dir: "logs"
+  max_alert_age_days: 14
+  max_log_age_days: 14
+
+runtime:
+  debug_view: true
+  save_debug_frames: false
+  health_endpoint_enabled: true
+  health_port: 8765
+  heartbeat_interval_seconds: 30
+  max_runtime_seconds:
