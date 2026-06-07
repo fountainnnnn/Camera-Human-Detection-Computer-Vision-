@@ -12,6 +12,7 @@ runs/
 models/*.pt
 models/*.onnx
 !models/human_kaist_lwir_yolo11n.pt
+yolo11*.pt
 __pycache__/
 *.pyc
 venv/

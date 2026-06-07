@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
@@ -24,6 +25,9 @@ class VideoSource:
 
     def read(self) -> FramePacket | None:
         raise NotImplementedError
+
+    def read_snapshot(self) -> np.ndarray | None:
+        return None
 
     def release(self) -> None:
         return
@@ -61,16 +65,34 @@ class WebcamSource(OpenCVSource):
 
 
 class RTSPSource(OpenCVSource):
-    def __init__(self, detection_url: str, snapshot_url: str, reconnect_delay_seconds: int) -> None:
+    def __init__(
+        self,
+        detection_url: str,
+        snapshot_url: str,
+        reconnect_delay_seconds: int,
+        threaded: bool = True,
+    ) -> None:
         super().__init__()
         self.detection_url = detection_url
         self.snapshot_url = snapshot_url
         self.reconnect_delay_seconds = reconnect_delay_seconds
+        self.threaded = threaded
         self._snapshot_capture: cv2.VideoCapture | None = None
+        self._latest_frame: np.ndarray | None = None
+        self._latest_timestamp: datetime | None = None
+        self._lock = threading.Lock()
+        self._stop_reader = threading.Event()
+        self._reader_thread: threading.Thread | None = None
         self._open()
+        if self.threaded:
+            self._reader_thread = threading.Thread(target=self._reader_loop, name="rtsp-frame-reader", daemon=True)
+            self._reader_thread.start()
 
     def _open(self) -> None:
         self.capture = cv2.VideoCapture(self.detection_url, cv2.CAP_FFMPEG)
+        buffer_prop = getattr(cv2, "CAP_PROP_BUFFERSIZE", None)
+        if buffer_prop is not None and callable(getattr(self.capture, "set", None)):
+            self.capture.set(buffer_prop, 1)
 
     def _open_snapshot(self) -> None:
         if self.snapshot_url:
@@ -90,21 +112,50 @@ class RTSPSource(OpenCVSource):
             return None
         return frame
 
-    def read(self) -> FramePacket | None:
+    def _read_from_capture(self) -> FramePacket | None:
         if self.capture is None or not self.capture.isOpened():
             self._open()
             time.sleep(self.reconnect_delay_seconds)
         ok, frame = self.capture.read()
         if not ok or frame is None:
-            self.release()
+            super().release()
             time.sleep(self.reconnect_delay_seconds)
             return None
-        snapshot = self._read_snapshot()
-        if snapshot is None:
-            snapshot = frame.copy()
-        return FramePacket(frame=frame, timestamp=now_local(), snapshot_frame=snapshot)
+        return FramePacket(frame=frame, timestamp=now_local(), snapshot_frame=None)
+
+    def _reader_loop(self) -> None:
+        while not self._stop_reader.is_set():
+            packet = self._read_from_capture()
+            if packet is None:
+                continue
+            with self._lock:
+                self._latest_frame = packet.frame
+                self._latest_timestamp = packet.timestamp
+
+    def read(self) -> FramePacket | None:
+        if not self.threaded:
+            return self._read_from_capture()
+
+        deadline = time.monotonic() + max(0.5, min(float(self.reconnect_delay_seconds), 2.0))
+        while not self._stop_reader.is_set():
+            with self._lock:
+                frame = self._latest_frame
+                timestamp = self._latest_timestamp
+            if frame is not None and timestamp is not None:
+                return FramePacket(frame=frame, timestamp=timestamp, snapshot_frame=None)
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.01)
+        return None
+
+    def read_snapshot(self) -> np.ndarray | None:
+        return self._read_snapshot()
 
     def release(self) -> None:
+        self._stop_reader.set()
+        if self._reader_thread is not None and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=1.0)
+            self._reader_thread = None
         super().release()
         if self._snapshot_capture is not None:
             self._snapshot_capture.release()

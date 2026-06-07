@@ -3,6 +3,8 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import numpy  # noqa: F401
+
 
 class FakeFrame:
     def __init__(self, name: str, copy_result=None) -> None:
@@ -39,7 +41,7 @@ def load_camera_module(fake_cv2):
         return importlib.import_module("src.camera")
 
 
-def test_rtsp_source_uses_snapshot_stream_for_alert_frame(monkeypatch) -> None:
+def test_rtsp_source_defers_snapshot_stream_until_alert(monkeypatch) -> None:
     captures = []
     detection_frame = FakeFrame("detect", copy_result=FakeFrame("detect-copy"))
     snapshot_frame = FakeFrame("snapshot")
@@ -56,12 +58,17 @@ def test_rtsp_source_uses_snapshot_stream_for_alert_frame(monkeypatch) -> None:
     camera_module = load_camera_module(fake_cv2)
     monkeypatch.setattr(camera_module.time, "sleep", lambda *_args, **_kwargs: None)
 
-    source = camera_module.RTSPSource("rtsp://detect", "rtsp://snapshot", reconnect_delay_seconds=3)
+    source = camera_module.RTSPSource("rtsp://detect", "rtsp://snapshot", reconnect_delay_seconds=3, threaded=False)
     packet = source.read()
 
     assert packet is not None
     assert packet.frame is detection_frame
-    assert packet.snapshot_frame is snapshot_frame
+    assert packet.snapshot_frame is None
+    assert captures == [
+        ("rtsp://detect", 1900),
+    ]
+
+    assert source.read_snapshot() is snapshot_frame
     assert captures == [
         ("rtsp://detect", 1900),
         ("rtsp://snapshot", 1900),
@@ -84,11 +91,12 @@ def test_rtsp_source_falls_back_to_detection_frame_when_snapshot_fails(monkeypat
     camera_module = load_camera_module(fake_cv2)
     monkeypatch.setattr(camera_module.time, "sleep", lambda *_args, **_kwargs: None)
 
-    source = camera_module.RTSPSource("rtsp://detect", "rtsp://snapshot", reconnect_delay_seconds=3)
+    source = camera_module.RTSPSource("rtsp://detect", "rtsp://snapshot", reconnect_delay_seconds=3, threaded=False)
     packet = source.read()
 
     assert packet is not None
-    assert packet.snapshot_frame is detection_copy
+    assert packet.snapshot_frame is None
+    assert source.read_snapshot() is None
     assert snapshot_capture.released is True
 
 
@@ -105,7 +113,7 @@ def test_rtsp_source_returns_none_and_releases_capture_when_stream_drops(monkeyp
     sleep_calls = []
     monkeypatch.setattr(camera_module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
 
-    source = camera_module.RTSPSource("rtsp://detect", "", reconnect_delay_seconds=7)
+    source = camera_module.RTSPSource("rtsp://detect", "", reconnect_delay_seconds=7, threaded=False)
 
     assert source.read() is None
     assert detection_capture.released is True

@@ -55,6 +55,8 @@ class TemporalAlertFilter:
             return AlertDecision(False, "insufficient_positive_frames", positive_frames, duration, cooldown_remaining)
         if duration < self.min_detection_duration_seconds:
             return AlertDecision(False, "insufficient_duration", positive_frames, duration, cooldown_remaining)
+        if not has_detection:
+            return AlertDecision(False, "current_frame_no_detection", positive_frames, duration, cooldown_remaining)
         if cooldown_remaining > 0:
             return AlertDecision(False, "cooldown_active", positive_frames, duration, cooldown_remaining)
 

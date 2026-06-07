@@ -3,6 +3,8 @@ from unittest.mock import patch
 import importlib
 import sys
 
+import numpy  # noqa: F401
+
 from src.config import AppConfig
 
 

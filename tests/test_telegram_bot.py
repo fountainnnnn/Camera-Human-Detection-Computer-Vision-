@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -33,7 +34,14 @@ def test_send_photo_posts_image_to_telegram(tmp_path: Path) -> None:
 
     post.assert_called_once()
     _, kwargs = post.call_args
-    assert kwargs["data"] == {"chat_id": "123", "caption": "caption"}
+    assert kwargs["data"]["chat_id"] == "123"
+    assert kwargs["data"]["caption"] == "caption"
+    reply_markup = json.loads(kwargs["data"]["reply_markup"])
+    assert reply_markup["inline_keyboard"][0][0]["text"] == "联系儿子"
+    assert reply_markup["inline_keyboard"][0][0]["url"] == "https://wa.me/6591863614"
+    assert reply_markup["inline_keyboard"][0][1]["text"] == "联系丈夫"
+    assert reply_markup["inline_keyboard"][0][1]["url"] == "https://wa.me/6593838469"
+    assert reply_markup["inline_keyboard"][1][0] == {"text": "报警", "callback_data": "confirm_police_call"}
     assert kwargs["timeout"] == 15
     assert "photo" in kwargs["files"]
     assert kwargs["files"]["photo"].name.endswith("image.jpg")
@@ -47,12 +55,13 @@ def test_build_caption_includes_human_alert_context() -> None:
     caption = build_caption(
         config=config,
         timestamp_text="2026-06-05T12:00:00+08:00",
+        person_count=2,
         confidence=0.91,
         detection_duration_seconds=2.5,
         cooldown_seconds=60.0,
     )
-    assert "Front Door" in caption
-    assert "mode: rtsp" in caption
-    assert "confidence: 0.91" in caption
-    assert "detection_duration: 2.5s" in caption
-    assert "cooldown: 60.0s" in caption
+    assert caption.startswith("Front Door 检测到 2 个人")
+    assert "最高置信度为 91%" in caption
+    assert "检测模式为 rtsp" in caption
+    assert "检测持续时间为 2.5s" in caption
+    assert "下一次告警冷却时间为 60.0s" in caption

@@ -1,16 +1,32 @@
 from __future__ import annotations
 
 import os
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import requests
+from requests import HTTPError
 
 from .config import AppConfig
 
 
 def _format_seconds(seconds: float) -> str:
     return f"{seconds:.1f}s"
+
+
+def build_alert_keyboard() -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "联系儿子", "url": "https://wa.me/6591863614"},
+                {"text": "联系丈夫", "url": "https://wa.me/6593838469"},
+            ],
+            [
+                {"text": "报警", "callback_data": "confirm_police_call"},
+            ],
+        ]
+    }
 
 
 @dataclass
@@ -38,26 +54,33 @@ class TelegramAlertClient:
         with Path(image_path).open("rb") as image_file:
             response = requests.post(
                 url,
-                data={"chat_id": self.chat_id, "caption": caption},
+                data={
+                    "chat_id": self.chat_id,
+                    "caption": caption,
+                    "reply_markup": json.dumps(build_alert_keyboard(), ensure_ascii=False),
+                },
                 files={"photo": image_file},
                 timeout=self.timeout_seconds,
             )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except HTTPError:
+            raise RuntimeError(f"Telegram sendPhoto failed with HTTP {response.status_code}: {response.text}") from None
         return True
 
 
 def build_caption(
     config: AppConfig,
     timestamp_text: str,
+    person_count: int,
     confidence: float,
     detection_duration_seconds: float,
     cooldown_seconds: float,
 ) -> str:
+    people_text = "1 个人" if person_count == 1 else f"{person_count} 个人"
+    confidence_percent = confidence * 100
     return (
-        f"{config.camera.name}\n"
-        f"mode: {config.input.mode}\n"
-        f"time: {timestamp_text}\n"
-        f"confidence: {confidence:.2f}\n"
-        f"detection_duration: {_format_seconds(detection_duration_seconds)}\n"
-        f"cooldown: {_format_seconds(cooldown_seconds)}"
+        f"{config.camera.name} 检测到 {people_text}，最高置信度为 {confidence_percent:.0f}%。"
+        f"检测模式为 {config.input.mode}，检测持续时间为 {_format_seconds(detection_duration_seconds)}。"
+        f"告警时间为 {timestamp_text}，下一次告警冷却时间为 {_format_seconds(cooldown_seconds)}。"
     )

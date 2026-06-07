@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import numpy  # noqa: F401
+
 from src.config import AppConfig
 
 
@@ -26,6 +28,9 @@ class FakeSource:
     def read(self):
         if self._packets:
             return self._packets.pop(0)
+        return None
+
+    def read_snapshot(self):
         return None
 
     def release(self) -> None:
@@ -107,7 +112,13 @@ def test_run_shows_debug_preview_when_enabled(monkeypatch) -> None:
         main_module,
         "TemporalAlertFilter",
         lambda **_kwargs: SimpleNamespace(
-            evaluate=lambda *_args: SimpleNamespace(triggered=False, reason="ok", detection_duration_seconds=0.0)
+                evaluate=lambda *_args: SimpleNamespace(
+                    triggered=False,
+                    reason="ok",
+                    detection_duration_seconds=0.0,
+                    positive_frames=0,
+                    cooldown_remaining_seconds=0.0,
+                )
         ),
     )
     monkeypatch.setattr(
@@ -159,7 +170,13 @@ def test_run_saves_debug_frames_when_enabled(monkeypatch, tmp_path: Path) -> Non
         main_module,
         "TemporalAlertFilter",
         lambda **_kwargs: SimpleNamespace(
-            evaluate=lambda *_args: SimpleNamespace(triggered=False, reason="ok", detection_duration_seconds=0.0)
+                evaluate=lambda *_args: SimpleNamespace(
+                    triggered=False,
+                    reason="ok",
+                    detection_duration_seconds=0.0,
+                    positive_frames=1,
+                    cooldown_remaining_seconds=0.0,
+                )
         ),
     )
     monkeypatch.setattr(
@@ -212,7 +229,13 @@ def test_run_recovers_after_temporary_source_drop(monkeypatch) -> None:
         main_module,
         "TemporalAlertFilter",
         lambda **_kwargs: SimpleNamespace(
-            evaluate=lambda *_args: SimpleNamespace(triggered=False, reason="ok", detection_duration_seconds=0.0)
+                evaluate=lambda *_args: SimpleNamespace(
+                    triggered=False,
+                    reason="ok",
+                    detection_duration_seconds=0.0,
+                    positive_frames=0,
+                    cooldown_remaining_seconds=0.0,
+                )
         ),
     )
     monkeypatch.setattr(
@@ -268,7 +291,13 @@ def test_run_saves_alert_snapshot_locally_when_detection_is_confirmed(monkeypatc
         main_module,
         "TemporalAlertFilter",
         lambda **_kwargs: SimpleNamespace(
-            evaluate=lambda *_args: SimpleNamespace(triggered=True, reason="confirmed", detection_duration_seconds=2.5)
+            evaluate=lambda *_args: SimpleNamespace(
+                triggered=True,
+                reason="confirmed",
+                detection_duration_seconds=2.5,
+                positive_frames=2,
+                cooldown_remaining_seconds=0.0,
+            )
         ),
     )
     monkeypatch.setattr(
@@ -291,7 +320,7 @@ def test_run_saves_alert_snapshot_locally_when_detection_is_confirmed(monkeypatc
     assert saved_paths[0].name.endswith("_webcam.jpg")
     assert len(sent) == 1
     assert sent[0][0] == saved_paths[0]
-    assert annotate_calls == [packet.snapshot_frame]
+    assert annotate_calls == [packet.frame]
     assert any(args and args[0].startswith("alert camera=") for args in detection_logger.infos)
 
 
@@ -323,8 +352,20 @@ def test_run_continues_loop_after_confirmed_alert(monkeypatch) -> None:
     logger = FakeLogger()
     alert_results = iter(
         [
-            SimpleNamespace(triggered=True, reason="confirmed", detection_duration_seconds=2.0),
-            SimpleNamespace(triggered=False, reason="cooldown_active", detection_duration_seconds=2.0),
+            SimpleNamespace(
+                triggered=True,
+                reason="confirmed",
+                detection_duration_seconds=2.0,
+                positive_frames=2,
+                cooldown_remaining_seconds=0.0,
+            ),
+            SimpleNamespace(
+                triggered=False,
+                reason="cooldown_active",
+                detection_duration_seconds=2.0,
+                positive_frames=2,
+                cooldown_remaining_seconds=9.0,
+            ),
         ]
     )
 
@@ -351,7 +392,11 @@ def test_run_continues_loop_after_confirmed_alert(monkeypatch) -> None:
     monkeypatch.setattr(main_module.signal, "signal", lambda *_args, **_kwargs: None)
 
     assert main_module.run("config.yaml") == 0
-    processed_logs = [args for args in logger.infos if args and args[0] == "frame processed mode=%s detections=%s reason=%s"]
+    processed_logs = [
+        args
+        for args in logger.infos
+        if args and args[0] == "frame processed mode=%s detections=%s confidence=%.2f positives=%s cooldown=%.1f reason=%s"
+    ]
     assert len(processed_logs) == 2
 
 
@@ -389,7 +434,13 @@ def test_run_stops_when_configured_max_runtime_is_reached(monkeypatch) -> None:
         main_module,
         "TemporalAlertFilter",
         lambda **_kwargs: SimpleNamespace(
-            evaluate=lambda *_args: SimpleNamespace(triggered=False, reason="ok", detection_duration_seconds=0.0)
+                evaluate=lambda *_args: SimpleNamespace(
+                    triggered=False,
+                    reason="ok",
+                    detection_duration_seconds=0.0,
+                    positive_frames=0,
+                    cooldown_remaining_seconds=0.0,
+                )
         ),
     )
     monkeypatch.setattr(

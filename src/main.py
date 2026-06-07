@@ -118,23 +118,27 @@ def run(config_path: str = "config.yaml") -> int:
             metrics.note_frame(packet.timestamp)
             detections = detector.detect(packet.frame)
             has_detection = bool(detections)
+            decision_time = now_local()
             if has_detection:
-                metrics.note_detection(packet.timestamp)
+                metrics.note_detection(decision_time)
 
-            decision = alert_filter.evaluate(packet.timestamp, has_detection)
+            decision = alert_filter.evaluate(decision_time, has_detection)
             best_confidence = detections[0].confidence if detections else 0.0
 
             logger.info(
-                "frame processed mode=%s detections=%s reason=%s",
+                "frame processed mode=%s detections=%s confidence=%.2f positives=%s cooldown=%.1f reason=%s",
                 config.input.mode,
                 len(detections),
+                best_confidence,
+                decision.positive_frames,
+                decision.cooldown_remaining_seconds,
                 decision.reason,
             )
 
             if decision.triggered and detections:
                 alert_time = now_local()
                 annotated = annotate_frame(
-                    packet.snapshot_frame if packet.snapshot_frame is not None else packet.frame,
+                    packet.frame,
                     detections,
                     config.camera.name,
                     alert_time.isoformat(timespec="seconds"),
@@ -144,6 +148,7 @@ def run(config_path: str = "config.yaml") -> int:
                 caption = build_caption(
                     config=config,
                     timestamp_text=alert_time.isoformat(timespec="seconds"),
+                    person_count=len(detections),
                     confidence=best_confidence,
                     detection_duration_seconds=decision.detection_duration_seconds,
                     cooldown_seconds=config.detection.alert_cooldown_seconds,

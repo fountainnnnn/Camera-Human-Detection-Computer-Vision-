@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import numpy  # noqa: F401
 import pytest
 
 from src.config import AppConfig
