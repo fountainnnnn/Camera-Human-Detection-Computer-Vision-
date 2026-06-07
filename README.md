@@ -52,6 +52,10 @@ If PowerShell blocks activation:
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
+## Docker
+
+For headless deployment where another service watches logs or the health endpoint, see `DOCKER.md`.
+
 ## Configuration
 
 `config.yaml` controls the runtime. The shipped defaults start in webcam mode so the pipeline can be validated before RTSP setup. The example config points at the packaged trained model:

@@ -22,9 +22,6 @@ def build_alert_keyboard() -> dict:
                 {"text": "联系儿子", "url": "https://wa.me/6591863614"},
                 {"text": "联系丈夫", "url": "https://wa.me/6593838469"},
             ],
-            [
-                {"text": "报警", "callback_data": "confirm_police_call"},
-            ],
         ]
     }
 

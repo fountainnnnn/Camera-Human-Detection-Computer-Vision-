@@ -1,0 +1,27 @@
+services:
+  security-ai:
+    build: .
+    container_name: security-ai
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./alerts:/app/alerts
+      - ./logs:/app/logs
+      - ./models:/app/models:ro
+      - ./yolo11m.pt:/app/yolo11m.pt:ro
+    ports:
+      - "8765:8765"
+
+  telegram-reply-bot:
+    build: .
+    container_name: security-ai-telegram-reply
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["python", "scripts/telegram_reply_bot.py", "--config", "config.yaml"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    profiles:
+      - telegram-reply

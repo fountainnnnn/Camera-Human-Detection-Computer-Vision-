@@ -41,7 +41,7 @@ def test_send_photo_posts_image_to_telegram(tmp_path: Path) -> None:
     assert reply_markup["inline_keyboard"][0][0]["url"] == "https://wa.me/6591863614"
     assert reply_markup["inline_keyboard"][0][1]["text"] == "联系丈夫"
     assert reply_markup["inline_keyboard"][0][1]["url"] == "https://wa.me/6593838469"
-    assert reply_markup["inline_keyboard"][1][0] == {"text": "报警", "callback_data": "confirm_police_call"}
+    assert len(reply_markup["inline_keyboard"]) == 1
     assert kwargs["timeout"] == 15
     assert "photo" in kwargs["files"]
     assert kwargs["files"]["photo"].name.endswith("image.jpg")

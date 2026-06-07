@@ -25,26 +25,6 @@ def _send_message(token: str, chat_id: int, text: str, reply_markup: dict | None
     response.raise_for_status()
 
 
-def _answer_callback(token: str, callback_query_id: str, text: str = "") -> None:
-    response = requests.post(
-        f"https://api.telegram.org/bot{token}/answerCallbackQuery",
-        data={"callback_query_id": callback_query_id, "text": text},
-        timeout=15,
-    )
-    response.raise_for_status()
-
-
-def _police_confirmation_keyboard() -> dict:
-    return {
-        "inline_keyboard": [
-            [
-                {"text": "确认报警", "callback_data": "final_confirm_police_call"},
-                {"text": "取消", "callback_data": "cancel_police_call"},
-            ]
-        ]
-    }
-
-
 def _reply_text(message_text: str, chat_id: int) -> str:
     text = message_text.strip().lower()
     if text in {"/start", "start"}:
@@ -90,29 +70,6 @@ def main() -> int:
 
         for update in payload.get("result", []):
             offset = int(update["update_id"]) + 1
-            callback_query = update.get("callback_query")
-            if callback_query:
-                callback_id = callback_query.get("id")
-                data = callback_query.get("data")
-                message = callback_query.get("message") or {}
-                chat = message.get("chat") or {}
-                chat_id = chat.get("id")
-                if callback_id and data == "confirm_police_call" and chat_id is not None:
-                    _answer_callback(token, callback_id, "请再次确认。")
-                    _send_message(
-                        token,
-                        int(chat_id),
-                        "请确认是否拨打马来西亚警方 999。只有确认后才会打开拨号。",
-                        _police_confirmation_keyboard(),
-                    )
-                    print(f"sent police confirmation chat_id={chat_id}")
-                elif callback_id and data == "cancel_police_call":
-                    _answer_callback(token, callback_id, "已取消。")
-                elif callback_id and data == "final_confirm_police_call" and chat_id is not None:
-                    _answer_callback(token, callback_id, "请立即拨打 999。")
-                    _send_message(token, int(chat_id), "请立即拨打马来西亚警方紧急号码 999。")
-                continue
-
             message = update.get("message") or update.get("edited_message")
             if not message:
                 continue
