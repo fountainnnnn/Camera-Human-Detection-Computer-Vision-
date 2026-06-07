@@ -48,6 +48,20 @@ def test_send_photo_posts_image_to_telegram(tmp_path: Path) -> None:
     response.raise_for_status.assert_called_once()
 
 
+def test_send_photo_posts_to_multiple_telegram_chats(tmp_path: Path) -> None:
+    image_path = tmp_path / "image.jpg"
+    image_path.write_bytes(b"image-bytes")
+    response = Mock()
+    client = TelegramAlertClient(enabled=True, bot_token="token", chat_id="123, 456")
+
+    with patch("src.telegram_bot.requests.post", return_value=response) as post:
+        assert client.send_photo(image_path, "caption") is True
+
+    assert post.call_count == 2
+    assert post.call_args_list[0].kwargs["data"]["chat_id"] == "123"
+    assert post.call_args_list[1].kwargs["data"]["chat_id"] == "456"
+
+
 def test_build_caption_includes_human_alert_context() -> None:
     config = AppConfig()
     config.camera.name = "Front Door"
